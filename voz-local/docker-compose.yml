@@ -1,0 +1,53 @@
+services:
+  api:
+    build:
+      context: ./backend
+      target: api
+    env_file: .env
+    volumes:
+      - data:/data
+    # navegador:container — o uvicorn escuta em 8000 dentro do container
+    ports:
+      - "127.0.0.1:8001:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+  worker:
+    build:
+      context: ./backend
+      target: worker
+    env_file: .env
+    # Docker Desktop no Linux não repassa GPU NVIDIA; para CUDA use docker-compose.gpu.yml.
+    environment:
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+      DIARIZATION_DEVICE: cpu
+    volumes:
+      - data:/data
+      - models:/models
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+  frontend:
+    build: ./frontend
+    # navegador:container — o Nginx escuta em 80 dentro do container
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  data:
+  models:

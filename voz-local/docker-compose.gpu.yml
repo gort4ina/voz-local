@@ -1,0 +1,12 @@
+# Override GPU/CUDA. Requer NVIDIA Container Toolkit (no Linux, Docker Engine nativo).
+# Uso: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+services:
+  worker:
+    build:
+      context: ./backend
+      target: worker-cuda
+    gpus: all
+    environment:
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: int8_float16
+      DIARIZATION_DEVICE: cuda

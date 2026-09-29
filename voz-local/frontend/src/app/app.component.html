@@ -1,0 +1,128 @@
+<header class="topbar">
+  <a class="brand" href="/" (click)="$event.preventDefault(); newTranscription()">
+    <span class="brand-icon" aria-hidden="true">V</span>
+    <span>voz<span class="brand-light">local</span></span>
+  </a>
+  <span class="topbar-caption">Transcrição & identificação de falantes</span>
+  <span class="local-badge">Áudio no seu servidor</span>
+</header>
+
+<div class="app-layout">
+  <aside class="sidebar">
+    <button class="button primary new-button" (click)="newTranscription()" [disabled]="busy()">
+      ＋ Nova transcrição
+    </button>
+
+    <div class="sidebar-heading">
+      <h2>Gravações</h2>
+      <button class="text-button" (click)="refresh()" aria-label="Atualizar lista de gravações">↻</button>
+    </div>
+
+    <nav aria-label="Gravações">
+      @for (job of jobs(); track job.id) {
+        <button
+          class="job-item"
+          [class.selected]="activeId() === job.id"
+          [attr.aria-current]="activeId() === job.id ? 'page' : null"
+          (click)="open(job.id)"
+          [disabled]="busy()"
+        >
+          <strong>{{ job.original_filename }}</strong>
+          <span>{{ job.created_at | date:'dd/MM/yyyy HH:mm' }} · {{ time(job.duration) }}</span>
+          <span class="job-status" [class.failed]="job.status === 'FAILED'">{{ labels[job.status] }}</span>
+        </button>
+      } @empty {
+        <div class="empty-list">
+          <p>Nenhuma gravação ainda.</p>
+          <span>Seus arquivos aparecerão aqui após o envio.</span>
+        </div>
+      }
+    </nav>
+
+    @if (canLoadMore()) {
+      <button class="text-button" (click)="refresh(true)">Carregar mais</button>
+    }
+
+    <div class="sidebar-bottom">
+      <strong>Da conversa ao texto.</strong>
+      <p>Revise, organize e exporte com os falantes e horários preservados.</p>
+    </div>
+  </aside>
+
+  <main id="main-content">
+    <div class="page-heading">
+      <div>
+        <span class="eyebrow">ESPAÇO DE TRABALHO</span>
+        <h1>{{ activeId() ? 'Sua gravação' : 'Vamos ouvir sua conversa.' }}</h1>
+      </div>
+      @if (canDelete()) {
+        <div class="inline-actions">
+          @if (state()?.status === 'COMPLETED' && selected()?.audio_available) {
+            <button class="text-button danger" (click)="deleteMode.set('audio')">Excluir só o áudio</button>
+          }
+          <button class="text-button danger" (click)="deleteMode.set('all')">Excluir transcrição</button>
+        </div>
+      }
+    </div>
+
+    @if (error()) {
+      <div class="error" role="alert">
+        {{ error() }}
+        <button class="text-button" (click)="initialize()">Tentar novamente</button>
+      </div>
+    }
+
+    @if (loading()) {
+      <section class="panel" role="status">Carregando gravação…</section>
+    } @else if (!activeId()) {
+      <app-upload
+        [busy]="busy()"
+        [uploadProgress]="uploadProgress()"
+        [maxSize]="health()?.max_audio_size_mb ?? 512"
+        [maxDuration]="health()?.max_audio_duration_seconds ?? 7200"
+        (requested)="upload($event)"
+      />
+    } @else if (state(); as current) {
+      @if (current.status === 'COMPLETED') {
+        @if (selected(); as result) {
+          <app-transcript [transcript]="result" (changed)="selected.set($event)" />
+        }
+      } @else {
+        <app-processing [state]="current" [filename]="selected()?.original_filename ?? ''" />
+      }
+    }
+
+    <footer class="main-footer">
+      Voz Local
+      <span>Transcrição automática · revisão sob seu controle</span>
+    </footer>
+  </main>
+</div>
+
+@if (deleteMode(); as mode) {
+  <div class="modal-backdrop" (keydown.escape)="!deleting() && deleteMode.set(null)">
+    <section
+      appDialogFocus
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-title"
+      aria-describedby="delete-description"
+      class="panel modal"
+    >
+      <h2 id="delete-title">
+        {{ mode === 'all' ? 'Excluir esta transcrição?' : 'Excluir apenas o áudio?' }}
+      </h2>
+      <p id="delete-description">
+        {{ mode === 'all'
+          ? 'O áudio, os falantes e todos os trechos serão removidos deste servidor. Esta ação não pode ser desfeita.'
+          : 'O arquivo de áudio será removido. O texto e as exportações continuarão disponíveis, mas a reprodução será desativada.' }}
+      </p>
+      <div class="inline-actions">
+        <button class="button secondary" (click)="deleteMode.set(null)" [disabled]="deleting()">Cancelar</button>
+        <button class="button destructive" (click)="confirmDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Excluindo…' : 'Confirmar exclusão' }}
+        </button>
+      </div>
+    </section>
+  </div>
+}
